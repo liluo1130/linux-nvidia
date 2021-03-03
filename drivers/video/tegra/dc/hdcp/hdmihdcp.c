@@ -854,7 +854,7 @@ static int get_srm_signature(struct hdcp_context_t *hdcp_context,
 static int verify_link(struct tegra_nvhdcp *nvhdcp, bool wait_ri)
 {
 	struct tegra_hdmi *hdmi = nvhdcp->hdmi;
-	int retries = 3;
+	int retries = 3, ri_zero_retries = 3;
 	u16 old, rx, tx;
 	int e;
 
@@ -869,10 +869,13 @@ static int verify_link(struct tegra_nvhdcp *nvhdcp, bool wait_ri)
 		e = get_receiver_ri(nvhdcp, &rx);
 		if (!e) {
 			if (!rx) {
-				nvhdcp_err("Ri is 0!\n");
-				return -EINVAL;
+				nvhdcp_err("sor%u verify_link Ri is 0!\n",
+						hdmi->sor->ctrl_num);
+				if (!wait_ri || !--ri_zero_retries)
+					return -EINVAL;
+				msleep(50);
+				continue;
 			}
-
 			tx = get_transmitter_ri(hdmi);
 		} else {
 			rx = ~tx;
@@ -891,8 +894,11 @@ static int verify_link(struct tegra_nvhdcp *nvhdcp, bool wait_ri)
 	}
 	mutex_unlock(&nvhdcp->lock);
 
-	if (rx != tx)
+	if (rx != tx) {
+		nvhdcp_err("sor%u verify_link:rx=0x%04x tx=0x%04x\n",
+				hdmi->sor->ctrl_num, rx, tx);
 		return -EINVAL;
+	}
 
 	return 0;
 }
