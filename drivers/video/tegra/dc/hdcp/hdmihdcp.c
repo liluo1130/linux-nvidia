@@ -1,7 +1,7 @@
 /*
  * hdmihdcp.c: hdmi hdcp functions.
  *
- * Copyright (c) 2014-2022, NVIDIA CORPORATION, All rights reserved.
+ * Copyright (c) 2014-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -31,6 +31,7 @@
 
 #include <soc/tegra/kfuse.h>
 #include <soc/tegra/fuse.h>
+#include <soc/tegra/chip-id.h>
 #include <linux/trusty/trusty_ipc.h>
 #include <linux/ote_protocol.h>
 
@@ -1568,7 +1569,6 @@ static void nvhdcp1_downstream_worker(struct work_struct *work)
 		}
 	}
 
-
 	nvhdcp_vdbg("%s():started thread %s for sor: %x\n", __func__,
 			nvhdcp->name, nvhdcp->hdmi->sor->ctrl_num);
 	tegra_dc_io_start(dc);
@@ -2406,17 +2406,23 @@ static int nvhdcp_dev_open(struct inode *inode, struct file *filp)
 #ifndef CONFIG_TEGRA_ANDROID
 	int err = 0;
 #endif
+
 	filp->private_data = nvhdcp;
 
-/* enable policy only if HDCP TA is ready */
 #ifndef CONFIG_TEGRA_ANDROID
 	if (!nvhdcp->policy_initialized) {
 		nvhdcp->policy_initialized = true;
-		err = nvhdcp_te_open(nvhdcp);
+		/* enable policy only if HDCP TA is ready
+		 * but it doesn't check (if HDCP TA is ready) for VM case
+		 * which can enable HDCP when boot up.
+		 */
+		if (!is_tegra_hypervisor_mode())
+			err = nvhdcp_te_open(nvhdcp);
 		if (!err)
 			tegra_nvhdcp_set_policy(nvhdcp,
 				TEGRA_DC_HDCP_POLICY_ALWAYS_ON);
-		nvhdcp_te_close(nvhdcp);
+		if (!is_tegra_hypervisor_mode())
+			nvhdcp_te_close(nvhdcp);
 	}
 #endif
 	return 0;
