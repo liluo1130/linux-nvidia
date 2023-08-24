@@ -1,17 +1,14 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+ * All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
  *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms and conditions of the GNU General Public License,
- * version 2, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+ * property and proprietary rights in and to this material, related
+ * documentation and any modifications thereto. Any use, reproduction,
+ * disclosure or distribution of this material and related documentation
+ * without an express license agreement from NVIDIA CORPORATION or
+ * its affiliates is strictly prohibited.
  */
 
 #include <linux/init.h>
@@ -168,6 +165,11 @@ int l1ss_init(struct tegra_safety_ivc *safety_ivc)
 		return -1;
 	spin_lock_init(&ldata->slock);
 	ldata->wq = alloc_workqueue("l1ss", WQ_HIGHPRI, 0);
+	if (ldata->wq == NULL) {
+		pr_err("L1SS : failed to allocate l1ss workqueue\n");
+		return -ENOMEM;
+	}
+
 	ldata->head = NULL;
 	INIT_WORK(&ldata->work, l1ss_workqueue_function);
 	init_waitqueue_head(&ldata->cmd.notify_waitq);
@@ -176,10 +178,19 @@ int l1ss_init(struct tegra_safety_ivc *safety_ivc)
 	ldata->cmd_resp_lookup_table = cmd_resp_lookup_table;
 
 	err = alloc_chrdev_region(&ldata->dev, 0, MAX_DEV, "l1ss");
+	if (err) {
+		pr_err("L1SS : failed to allocate l1ss char dev\n");
+		return err;
+	}
 
 	ldata->dev_major = MAJOR(ldata->dev);
 
 	ldata->l1ss_class = class_create(THIS_MODULE, "l1ss");
+	if (IS_ERR(ldata->l1ss_class)) {
+		err = PTR_ERR(ldata->l1ss_class);
+		return err;
+	}
+
 	ldata->l1ss_class->dev_uevent = l1ss_uevent;
 
 	cdev_init(&ldata->cdev, &l1ss_fops);

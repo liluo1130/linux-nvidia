@@ -1,15 +1,14 @@
 /*
- * Copyright (c) 2016-2021, NVIDIA CORPORATION, All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+ * All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-NvidiaProprietary
  *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+ * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
+ * property and proprietary rights in and to this material, related
+ * documentation and any modifications thereto. Any use, reproduction,
+ * disclosure or distribution of this material and related documentation
+ * without an express license agreement from NVIDIA CORPORATION or
+ * its affiliates is strictly prohibited.
  */
 
 #include <linux/kernel.h>
@@ -367,6 +366,12 @@ static int tegra_safety_ivc_probe(struct platform_device *pdev)
 	init_waitqueue_head(&safety_ivc->cmd.response_waitq);
 	init_waitqueue_head(&safety_ivc->cmd.empty_waitq);
 	safety_ivc->wq = alloc_workqueue("safety_cmdresp", WQ_HIGHPRI, 0);
+	if (safety_ivc->wq == NULL) {
+		dev_err(dev, "failed to allocate safety_cmdresp workqueue\n");
+		ret = -ENOMEM;
+		goto fail;
+	}
+
 	INIT_WORK(&safety_ivc->work, tegra_safety_cmdresp_work_func);
 	mutex_init(&safety_ivc->rlock);
 	mutex_init(&safety_ivc->wlock);
