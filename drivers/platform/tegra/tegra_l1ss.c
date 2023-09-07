@@ -161,13 +161,18 @@ int l1ss_init(struct tegra_safety_ivc *safety_ivc)
 	int err;
 
 	ldata = kmalloc(sizeof(struct l1ss_data), GFP_KERNEL);
-	if (ldata == NULL)
-		return -1;
+	if (ldata == NULL) {
+		pr_err("L1SS : failed to allocate l1ss\n");
+		err = -ENOMEM;
+		goto err_nomem;
+	}
+
 	spin_lock_init(&ldata->slock);
 	ldata->wq = alloc_workqueue("l1ss", WQ_HIGHPRI, 0);
 	if (ldata->wq == NULL) {
 		pr_err("L1SS : failed to allocate l1ss workqueue\n");
-		return -ENOMEM;
+		err = -ENOMEM;
+		goto err_workqueue;
 	}
 
 	ldata->head = NULL;
@@ -180,7 +185,7 @@ int l1ss_init(struct tegra_safety_ivc *safety_ivc)
 	err = alloc_chrdev_region(&ldata->dev, 0, MAX_DEV, "l1ss");
 	if (err) {
 		pr_err("L1SS : failed to allocate l1ss char dev\n");
-		return err;
+		goto err_chrdev;
 	}
 
 	ldata->dev_major = MAJOR(ldata->dev);
@@ -188,7 +193,7 @@ int l1ss_init(struct tegra_safety_ivc *safety_ivc)
 	ldata->l1ss_class = class_create(THIS_MODULE, "l1ss");
 	if (IS_ERR(ldata->l1ss_class)) {
 		err = PTR_ERR(ldata->l1ss_class);
-		return err;
+		goto err_create_class;
 	}
 
 	ldata->l1ss_class->dev_uevent = l1ss_uevent;
@@ -205,6 +210,18 @@ int l1ss_init(struct tegra_safety_ivc *safety_ivc)
 	safety_ivc->ldata = ldata;
 
 	return 0;
+
+err_create_class:
+	unregister_chrdev_region(ldata->dev, MAX_DEV);
+
+err_chrdev:
+	destroy_workqueue(ldata->wq);
+
+err_workqueue:
+	kfree(ldata);
+
+err_nomem:
+	return err;
 }
 
 int l1ss_exit(struct tegra_safety_ivc *safety_ivc)
@@ -241,7 +258,7 @@ static int l1ss_open(struct inode *inode, struct file *file)
 	file->private_data = ldata;
 
 	if (ldata == NULL)
-		return -1;
+		return -EFAULT;
 
 	return 0;
 }
@@ -256,6 +273,7 @@ static int l1ss_release(struct inode *inode, struct file *file)
 		dev_major = ldata->dev_major;
 	} else {
 		PDEBUG("ldata is NULL\n");
+		return -EFAULT;
 	}
 
 	return 0;
@@ -553,7 +571,7 @@ static long l1ss_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		req = kmalloc(sizeof(nv_guard_request_t), GFP_KERNEL);
 		if (req == NULL) {
 			pr_err("Failed to allocate memory");
-			return -1;
+			return -ENOMEM;
 		}
 		if (copy_from_user(req, (nv_guard_request_t *)arg,
 				   sizeof(nv_guard_request_t))) {
@@ -584,7 +602,7 @@ int l1ss_submit_rq(nv_guard_request_t *req, bool can_sleep)
 		n = kmalloc(sizeof(struct l1ss_req_node), GFP_ATOMIC);
 	if (n == NULL) {
 		pr_err("Failed to allocate memory");
-		return -1;
+		return -ENOMEM;
 	}
 	n->next = NULL;
 	if (can_sleep)
@@ -594,7 +612,7 @@ int l1ss_submit_rq(nv_guard_request_t *req, bool can_sleep)
 	if (n->req == NULL) {
 		pr_err("Failed to allocate memory");
 		kfree(n);
-		return -1;
+		return -ENOMEM;
 	}
 	memcpy(n->req, req, sizeof(nv_guard_request_t));
 
