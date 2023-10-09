@@ -507,9 +507,9 @@ static void vi5_capture_dequeue(struct tegra_channel *chan,
 		} else if (!vi_port) {
 			gang_prev_frame_id = descr->status.frame_id;
 		} else if (descr->status.frame_id != gang_prev_frame_id) {
-			dev_err(vi->dev, "frame_id out of sync: ch2 %d vs ch1 %d\n",
+			dev_warn(vi->dev, "frame_id out of sync: ch2 %d vs ch1 %d\n",
 					gang_prev_frame_id, descr->status.frame_id);
-			goto uncorr_err;
+			frame_err = true;
 		}
 
 		spin_lock_irqsave(&chan->capture_state_lock, flags);
